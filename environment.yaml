@@ -1,0 +1,9 @@
+name: timeflux-amti-env
+dependencies:
+    - python>=3.6
+    - numpy>=1.16
+    - pip
+    - pip:
+        - git+https://github.com/timeflux/timeflux@v0.1#egg=timeflux
+        # Optional timeflux-ui if you want to use the UI server
+        - git+https://github.com/timeflux/timeflux_ui#egg=timeflux-ui

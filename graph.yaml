@@ -1,0 +1,39 @@
+graphs:
+  - nodes:
+    - id: driver
+      module: timeflux_amti.driver
+      class: ForceDriver
+      params:
+        rate: 100
+        path: "C:\\Windows\SysWOW64"
+
+    - id: display
+      module: timeflux.nodes.debug
+      class: Display
+
+    - id: viz
+      module: timeflux_ui.nodes.ui
+      class: UI
+
+#    - id: outlet
+#      module: timeflux.nodes.lsl
+#      class: Send
+#      params:
+#        name: force
+#        rate: 10
+
+#    - id: hdf5
+#      module: timeflux.nodes.hdf5
+#      class: Save
+#      params:
+#        path: "test_data"
+
+    rate: 20
+
+    edges:
+      - source: driver
+        target: viz:force
+      - source: driver
+        target: display
+      #- source: driver
+      #  target: hdf5:force

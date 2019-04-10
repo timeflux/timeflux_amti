@@ -1,0 +1,2 @@
+class TimefluxAmtiException(Exception):
+    pass
