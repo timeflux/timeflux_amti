@@ -3,8 +3,8 @@
 """"""
 
 import ctypes
-import datetime
 import logging
+import os
 import sys
 import time
 
@@ -12,7 +12,6 @@ from timeflux.core.node import Node
 import numpy as np
 
 from timeflux_amti.exceptions import TimefluxAmtiException
-from timeflux_amti.utils import path_context
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +24,14 @@ class ForceDriver(Node):
         40, 30, 25, 20, 15, 10
     )
 
-    def __init__(self, rate, path=None):
+    def __init__(self, rate, dll_dir):
         super().__init__()
         if rate not in ForceDriver.SAMPLING_RATES:
             raise ValueError('Invalid sampling rate')
-        self._path = path
+        elif rate > 1000:
+            # TODO: issue warning, the manual says the max is 1000 Hz
+            pass
+        self._path = dll_dir
         self._rate = rate
         self._channel_names = ('counter', 'Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz', 'trigger')
         self._dll = None
@@ -47,11 +49,10 @@ class ForceDriver(Node):
         if self._dll is None:
             logger.info('Loading DLL AMTIUSBDevice')
             try:
-                with path_context(self._path):
-                    #self._dll = ctypes.cdll.AMTIUSBDevice
-                    self._dll = ctypes.WinDLL(self._path + '\\AMTIUSBDevice.dll')
+                dll_filename = os.path.join(self._path, 'AMTIUSBDevice.dll')
+                self._dll = ctypes.WinDLL(dll_filename)
             except Exception as ex:
-                self.logger.error('Could not load AMTIUSBDevice driver', exc_info=True)
+                self.logger.error('Could not load AMTIUSBDevice driver %s', dll_filename, exc_info=True)
                 raise TimefluxAmtiException('Failed to load AMTIUSBDevice') from ex
         return self._dll
 
