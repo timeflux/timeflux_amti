@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 
-""""""
+"""Timeflux AMTI driver node
+
+Use this node to acquire data from a AMTI force device.
+"""
 
 import ctypes
-import os
+import pathlib
 import sys
 import time
 import warnings
@@ -49,10 +52,11 @@ class ForceDriver(Node):
         if self._dll is None:
             self.logger.info('Loading DLL AMTIUSBDevice')
             try:
-                dll_filename = os.path.join(self._path, 'AMTIUSBDevice.dll')
-                self._dll = ctypes.WinDLL(dll_filename)
+                dll_filename = pathlib.Path(self._path) / 'AMTIUSBDevice.dll'
+                self.logger.info('Attempting to load DLL %s', dll_filename)
+                self._dll = ctypes.WinDLL(str(dll_filename.resolve()))
             except Exception as ex:
-                self.logger.error('Could not load AMTIUSBDevice driver %s',
+                self.logger.error('Could not load AMTIUSBDevice driver %s.',
                                   dll_filename, exc_info=True)
                 raise TimefluxAmtiException('Failed to load AMTIUSBDevice') from ex
         return self._dll
@@ -130,7 +134,6 @@ class ForceDriver(Node):
         retries = 3
         while True:
             time.sleep(0.250)  # Sleep 250ms as specified in SDK section 20.0
-            # TODO: check or message on contents of AMTIUSBSetup.cfg?
             res = self.driver.fmDLLIsDeviceInitComplete()
             if res in (1, 2):
                 self.logger.info('DLL initialized')
@@ -138,6 +141,9 @@ class ForceDriver(Node):
             self.logger.info('DLL still not initialized, retrying...')
             retries -= 1
             if retries <= 0:
+                self.logger.warning('DLL initialization failed. '
+                                    'Suggestion: check the contents / existence '
+                                    'of C:/AMTI/AMTIUsbSetup.cfg')
                 raise TimefluxAmtiException('Could not initialize DLL')
 
         self.logger.info('Setup check')
@@ -147,7 +153,7 @@ class ForceDriver(Node):
             # 1: current setup is the same as the last saved configuration (ok)
             raise TimefluxAmtiException(f'Setup check failed with code {res}')
 
-        self.logger.info('Selecting device 0')
+        self.logger.info('Selecting device %d', self._dev_index)
         n_devices = self.driver.fmDLLGetDeviceCount()
         if n_devices <= 0:
             raise TimefluxAmtiException('No devices found')

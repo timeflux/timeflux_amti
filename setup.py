@@ -5,14 +5,9 @@
 
 from setuptools import setup, find_packages
 
-with open('README.rst') as readme_file:
-    readme = readme_file.read()
-
-# with open('HISTORY.rst') as history_file:
-#     history = history_file.read()
-
 requirements = [
     'numpy',
+    'timeflux @ git+https://github.com/timeflux/timeflux#egg=timeflux',
 ]
 
 setup_requirements = ['pytest-runner', ]
@@ -20,29 +15,22 @@ setup_requirements = ['pytest-runner', ]
 test_requirements = ['pytest', ]
 
 setup(
-    author="...",
+    author='',
     author_email='',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        "Programming Language :: Python :: 2",
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],
     description="Timeflux nodes for the AMTI force platform.",
     install_requires=requirements,
     license="MIT license",
-    long_description=readme,
     include_package_data=True,
-    keywords='timeflux_amti',
-    name='timeflux_amti',
-    packages=find_packages(include=['timeflux_amti']),
+    name='timeflux-amti',
+    packages=find_packages(include=['timeflux_amti'], exclude=['docs', 'tests']),
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,
