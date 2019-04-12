@@ -4,7 +4,7 @@ graphs:
       module: timeflux_amti.driver
       class: ForceDriver
       params:
-        rate: 500
+        rate: 100
         dll_dir: "C:/Users/user/my_dll_directory"
 
     - id: display
@@ -19,14 +19,14 @@ graphs:
       module: timeflux.nodes.hdf5
       class: Save
       params:
-        path: "test_data"
+        path: test_data
 
     rate: 20
 
     edges:
-#      - source: driver
-#        target: viz:force
       - source: driver
         target: display
       - source: driver
         target: hdf5:force
+#      - source: driver
+#        target: viz:force
