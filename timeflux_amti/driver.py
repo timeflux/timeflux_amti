@@ -32,7 +32,7 @@ class ForceDriver(Node):
         elif rate > 1000:
             warnings.warn(
                 'Sampling frequencies over 1000Hz are accepted, but the SDK '
-                'documentation discourages it.',
+                'documentation discourages it. There may be considerable drift.',
                 UserWarning,
                 stacklevel=2,
             )
