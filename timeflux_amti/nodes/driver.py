@@ -6,6 +6,7 @@ Use this node to acquire data from a AMTI force device.
 """
 
 import ctypes
+import os
 import pathlib
 import sys
 import time
@@ -25,7 +26,7 @@ class ForceDriver(Node):
         40, 30, 25, 20, 15, 10
     )
 
-    def __init__(self, rate, dll_dir, device_index=0):
+    def __init__(self, rate=500, dll_dir=None, device_index=0):
         super().__init__()
         if rate not in ForceDriver.SAMPLING_RATES:
             raise ValueError('Invalid sampling rate')
@@ -36,7 +37,7 @@ class ForceDriver(Node):
                 UserWarning,
                 stacklevel=2,
             )
-        self._path = dll_dir
+        self._path = dll_dir or os.getcwd()
         self._rate = rate
         self._dev_index = device_index
         self._channel_names = ('counter', 'Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz', 'trigger')
@@ -51,9 +52,9 @@ class ForceDriver(Node):
     def driver(self):
         if self._dll is None:
             self.logger.info('Loading DLL AMTIUSBDevice')
+            dll_filename = pathlib.Path(self._path) / 'AMTIUSBDevice.dll'
+            self.logger.info('Attempting to load DLL %s', dll_filename)
             try:
-                dll_filename = pathlib.Path(self._path) / 'AMTIUSBDevice.dll'
-                self.logger.info('Attempting to load DLL %s', dll_filename)
                 self._dll = ctypes.WinDLL(str(dll_filename.resolve()))
             except Exception as ex:
                 self.logger.error('Could not load AMTIUSBDevice driver %s.',

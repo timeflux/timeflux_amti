@@ -1,7 +1,7 @@
 graphs:
   - nodes:
     - id: driver
-      module: timeflux_amti.driver
+      module: timeflux_amti.nodes.driver
       class: ForceDriver
       params:
         rate: 100
@@ -11,15 +11,16 @@ graphs:
       module: timeflux.nodes.debug
       class: Display
 
-#    - id: viz
-#      module: timeflux_ui.nodes.ui
-#      class: UI
+    # Optional: uncomment to see the real-time signals on http://localhost:8000
+    #- id: viz
+    #  module: timeflux_ui.nodes.ui
+    #  class: UI
 
     - id: hdf5
       module: timeflux.nodes.hdf5
       class: Save
       params:
-        path: test_data
+        path: data
 
     rate: 20
 
@@ -28,5 +29,6 @@ graphs:
         target: display
       - source: driver
         target: hdf5:force
-#      - source: driver
-#        target: viz:force
+      # Optional: uncomment to see the real-time signals on http://localhost:8000
+      #- source: driver
+      #  target: viz:force

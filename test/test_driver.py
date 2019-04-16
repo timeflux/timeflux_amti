@@ -2,7 +2,7 @@ import time
 import os
 
 import pytest
-from timeflux_amti.driver import ForceDriver
+from timeflux_amti.nodes.driver import ForceDriver
 
 
 @pytest.fixture(scope='function')

@@ -2,7 +2,7 @@ import argparse
 import datetime
 import logging
 
-from timeflux_amti.driver import ForceDriver
+from timeflux_amti.nodes.driver import ForceDriver
 
 
 def main():
