@@ -1,3 +1,6 @@
+# Data files created on the sample record graph
+data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -64,7 +67,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+doc/build/
 
 # PyBuilder
 target/

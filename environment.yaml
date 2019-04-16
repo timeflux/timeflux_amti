@@ -5,8 +5,12 @@ dependencies:
     # Optional, to use timeflux_ui, add these dependencies as well:
     # - python-socketio
     # - aiohttp
+    - pytest
+    - sphinx
+    - sphinx_rtd_theme
     - pip
     - pip:
         - git+https://github.com/timeflux/timeflux@v0.1#egg=timeflux
+        - pytest-runner
         # Optional, to use timeflux-ui if you want to use the UI server
         # - git+https://github.com/timeflux/timeflux_ui#egg=timeflux-ui

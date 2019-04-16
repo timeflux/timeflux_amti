@@ -1,0 +1,38 @@
+graphs:
+  - nodes:
+    - id: driver
+      module: timeflux_amti.nodes.driver
+      class: ForceDriver
+      params:
+        rate: 100
+        # Optional, if you want to use a DLL in another directory instead of
+        # the DLL distributed with timeflux-amti
+        # dll_dir: "C:/Users/user/my_dll_directory"
+
+    - id: display
+      module: timeflux.nodes.debug
+      class: Display
+
+    # Optional: uncomment to see the real-time signals on http://localhost:8000
+    #- id: viz
+    #  module: timeflux_ui.nodes.ui
+    #  class: UI
+
+    - id: hdf5
+      module: timeflux.nodes.hdf5
+      class: Save
+      params:
+        # Note: until a version >0.1 of timeflux is released, you need to create
+        # this directory manually!
+        path: data
+
+    rate: 20
+
+    edges:
+      - source: driver
+        target: display
+      - source: driver
+        target: hdf5:force
+      # Optional: uncomment to see the real-time signals on http://localhost:8000
+      #- source: driver
+      #  target: viz:force
