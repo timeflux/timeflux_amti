@@ -7,15 +7,12 @@ from timeflux_amti.nodes.driver import ForceDriver
 
 @pytest.fixture(scope='function')
 def driver():
-    dll_dir = os.environ.get('AMTI_DLL_DIR')
+    dll_dir = os.environ.get('AMTI_DLL_DIR', None)
     amti = ForceDriver(rate=1000, dll_dir=dll_dir, device_index=0)
     yield amti
     amti.terminate()
 
 
-@pytest.mark.skipif(not os.environ.get('AMTI_DLL_DIR'),
-                    reason='Cannot test without a DLL directory defined as '
-                           'AMTI_DLL_DIR environment variable')
 def test_driver(driver):
     # Call a first time to clear old data
     driver.update()

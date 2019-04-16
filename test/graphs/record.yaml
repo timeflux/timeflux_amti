@@ -5,7 +5,9 @@ graphs:
       class: ForceDriver
       params:
         rate: 100
-        dll_dir: "C:/Users/user/my_dll_directory"
+        # Optional, if you want to use a DLL in another directory instead of
+        # the DLL distributed with timeflux-amti
+        # dll_dir: "C:/Users/user/my_dll_directory"
 
     - id: display
       module: timeflux.nodes.debug
@@ -20,6 +22,8 @@ graphs:
       module: timeflux.nodes.hdf5
       class: Save
       params:
+        # Note: until a version >0.1 of timeflux is released, you need to create
+        # this directory manually!
         path: data
 
     rate: 20
