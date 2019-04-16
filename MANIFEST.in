@@ -1,0 +1,2 @@
+include timeflux_amti/dll/windows/32bit/AMTIUSBDevice.dll
+include timeflux_amti/dll/windows/64bit/AMTIUSBDevice.dll

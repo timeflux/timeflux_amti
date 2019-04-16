@@ -6,7 +6,6 @@ Use this node to acquire data from a AMTI force device.
 """
 
 import ctypes
-import os
 import pathlib
 import sys
 import time
@@ -15,7 +14,14 @@ import warnings
 from timeflux.core.node import Node
 import numpy as np
 
+import timeflux_amti
 from timeflux_amti.exceptions import TimefluxAmtiException
+
+
+_default_dll_dir = (
+    pathlib.Path(timeflux_amti.__file__).parent / 'dll' / 'windows' /
+    ('64bit' if sys.maxsize > 2**32 else '32bit')
+).resolve()
 
 
 class ForceDriver(Node):
@@ -37,7 +43,7 @@ class ForceDriver(Node):
                 UserWarning,
                 stacklevel=2,
             )
-        self._path = dll_dir or os.getcwd()
+        self._path = dll_dir or str(_default_dll_dir)
         self._rate = rate
         self._dev_index = device_index
         self._channel_names = ('counter', 'Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz', 'trigger')
