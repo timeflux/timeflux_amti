@@ -1,3 +1,4 @@
+import logging
 import time
 import os
 
@@ -45,3 +46,18 @@ def test_buffer(driver):
     # If the counter does not increment of exactly one, there might have been
     # some circular buffer overflow
     assert np.all(df.counter.diff().fillna(1) == 1), 'DLL buffer overflow'
+
+
+def test_overflow_detection(driver, caplog):
+    """When the underlying buffer is overflowed, there is a warning"""
+    # Call a first time to clear old data
+    driver.update()
+    # Wait, then call again to collect data
+    time.sleep(11)
+
+    logger_name = 'timeflux_amti.nodes.driver.ForceDriver'
+    msg = 'Discontinuity on sample count. Check your sampling rate and graph rate!'
+    with caplog.at_level(logging.WARNING, logger=logger_name):
+        driver.update()
+        assert (logger_name, logging.WARNING, msg) in caplog.record_tuples, \
+            'Counter overflow was undetected'
