@@ -49,7 +49,6 @@ class ForceDriver(Node):
     number. In other words, this node trusts the time management of the
     underlying AMTI DLL.
 
-
     Args:
         rate (int): Sampling rate in Hz. It must be one of the supported
             frequencies as listed in :py:attr:`SAMPLING_RATES`. Defaults to
@@ -63,20 +62,6 @@ class ForceDriver(Node):
 
     Attributes:
         o (Port): Default output, provides a pandas.DataFrame with 8 columns.
-
-    Notes:
-        Using a sampling frequency higher than 1000 Hz have been observed to
-        drift significantly. Presumably, these higher frequencies would need
-        the usage of an external trigger (the genlock feature).
-
-        Make sure to use an appropriate rate on the graph that contains this
-        node. The graph rate should be short enough so that the underlying
-        AMTI DLL buffer does not overflow, which will give repeated samples
-        (this will be shown as a warning on the logs). The AMTI DLL buffer
-        can hold about 10000 complete samples. For example, using
-        ``ForceDriver(rate=1000)`` and a graph with rate of 0.1 (i.e. one
-        update every 10 seconds), you would be dangerously close to overwriting
-        the AMTI DLL buffer.
 
     Examples:
 
@@ -102,6 +87,31 @@ class ForceDriver(Node):
                 edges:
                   - source: driver
                     target: display
+
+    Notes:
+
+    .. attention::
+
+        Using a sampling frequency higher than 1000 Hz have been observed to
+        drift significantly. Presumably, these higher frequencies would need
+        the usage of an external trigger (the genlock feature).
+
+    .. hint::
+
+        Make sure to use an appropriate rate on the graph that contains this
+        node. The graph rate should be short enough so that the underlying
+        AMTI DLL buffer does not overflow, which will give repeated samples
+        (this will be shown as a warning on the logs). The AMTI DLL buffer
+        can hold about 10000 complete samples. For example, using
+        ``ForceDriver(rate=1000)`` and a graph with rate of 0.1 (i.e. one
+        update every 10 seconds), you would be dangerously close to overwriting
+        the AMTI DLL buffer.
+
+    .. warning::
+
+        Since this class opens a library (DLL) and the release code is not
+        guaranteed to free the library, using this class a second time on the
+        same Python interpreter will fail with an OSError.
 
     """
 
