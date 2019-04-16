@@ -55,7 +55,7 @@ def test_overflow_detection(driver, caplog):
     # Wait, then call again to collect data
     time.sleep(11)
 
-    logger_name = 'timeflux_amti.nodes.driver.ForceDriver'
+    logger_name = 'timeflux.core.node.ForceDriver'  # NOTE: this name is due to the Node metaclass
     msg = 'Discontinuity on sample count. Check your sampling rate and graph rate!'
     with caplog.at_level(logging.WARNING, logger=logger_name):
         driver.update()

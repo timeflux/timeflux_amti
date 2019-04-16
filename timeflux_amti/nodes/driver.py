@@ -189,7 +189,7 @@ class ForceDriver(Node):
             # the counter rolls over (which is at 2^24 - 1, according to SDK on
             # the fmDLLSetDataFormat function documentation)
             idx = np.where(np.diff(data[:, 0]) != 1)[0]
-            if idx and np.any(data[idx, 0] != (2**24 - 1)):
+            if idx.size > 0 and np.any(data[idx, 0] != (2**24 - 1)):
                 self.logger.warning('Discontinuity on sample count. Check '
                                     'your sampling rate and graph rate!')
 
