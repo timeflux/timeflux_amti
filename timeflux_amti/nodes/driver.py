@@ -262,9 +262,10 @@ class ForceDriver(Node):
 
         self.logger.info('Setup check')
         res = self.driver.fmDLLSetupCheck()
-        if res not in (0, 1):
+        if res not in (0, 1, 214):
             # 0: no signal conditioners found (ok)
             # 1: current setup is the same as the last saved configuration (ok)
+            # 214: configuration has changed (ok)
             raise TimefluxAmtiException(f'Setup check failed with code {res}')
 
         self.logger.info('Selecting device %d', self._dev_index)
