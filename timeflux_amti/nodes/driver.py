@@ -304,17 +304,81 @@ class ForceDriver(Node):
     def _diagnostics(self):
 
         self.logger.info('Performing AMTI diagnostics')
+        l6_buffer = (ctypes.c_long * 6)()
+        f6_buffer = (ctypes.c_float * 6)()
+        f12_buffer = (ctypes.c_float * 12)()
+        f18_buffer = (ctypes.c_float * 18)()
+        f24_buffer = (ctypes.c_float * 24)()
+        c32_buffer = (ctypes.c_char * 32)()  # Use 32 instead of 16 or 12 chars in case \0 is not set
+
         n_devices = self.driver.fmDLLGetDeviceCount()
         diagnostics_all = []
         for dev in range(n_devices):
-            device_diagnostic = dict(index=dev)
+            info = dict(index=dev)
             self.driver.fmDLLSelectDeviceIndex(dev)
-            # gains
-            l_buffer = (ctypes.c_long * 6)()
-            self.driver.fmDLLGetCurrentGains(l_buffer)
-            device_diagnostic['gains'] = l_buffer
 
-            diagnostics_all.append(device_diagnostic)
+            # product type
+            info['product_type'] = self.driver.fmGetProductType()
+            # amplifier model number
+            self.driver.fmGetAmplifierModelNumber(c32_buffer)
+            info['amplifier_model_number'] = str(c32_buffer)
+            # amplifier serial number
+            self.driver.fmGetAmplifierSerialNumber(c32_buffer)
+            info['amplifier_serial_number'] = str(c32_buffer)
+            # amplifier firmware version
+            self.driver.fmGetAmplifierFirmwareVersion(c32_buffer)
+            info['amplifier_firmware_version'] = str(c32_buffer)
+            # amplifier last calibration date
+            self.driver.fmGetAmplifierDate(c32_buffer)
+            info['amplifier_last_calibration_date'] = str(c32_buffer)
+            # gain table
+            self.driver.fmGetGainTable(f24_buffer)
+            info['gain_table'] = list(f24_buffer)
+            # excitation table
+            self.driver.fmGetExcitationTable(f18_buffer)
+            info['excitation_table'] = list(f18_buffer)
+            # DAC gains table
+            self.driver.fmGetDACGainsTable(f6_buffer)
+            info['DAC_gains_table'] = list(f6_buffer)
+            # DAC offset table
+
+            # DAC sensitivity table
+
+            # DAC sensitivities
+
+            # gains
+            self.driver.fmGetCurrentGains(l6_buffer)
+            info['gains'] = list(l6_buffer)
+            # excitations
+            self.driver.fmGetCurrentExcitations(l6_buffer)
+            info['excitations'] = list(l6_buffer)
+            # matrix mode
+            info['matrix_mode'] = self.driver.fmGetMatrixMode()
+            # channel offsets
+            self.driver.fmGetChannelOffsetsTable(f6_buffer)
+            info['channel_offsets'] = list(f6_buffer)
+            # platform rotation
+            info['platform_rotation'] = self.driver.fmGetPlatformRotation()
+            # cable length
+            info['cable_length'] = self.driver.fmGetCableLength()
+            # mechanical max and min
+            if self.driver.fmGetMechanicalMaxAndMin(f12_buffer) != 1:
+                raise RuntimeError('Unexpected return value to fmGetMechanicalMaxAndMin')
+            info['mechanical_max_and_min'] = list(f12_buffer)
+            # analog max and min
+            if self.driver.fmGetAnalogMaxAndMin(f12_buffer) != 1:
+                raise RuntimeError('Unexpected return value to fmGetAnalogMaxAndMin')
+            info['analog_max_and_min'] = list(f12_buffer)
+
+            # sensitivity table
+
+            # run mode
+
+            # acquisition rate
+
+            # product type
+
+            diagnostics_all.append(info)
 
         self.logger.info('AMTI diagnostics results:\n %s',
                          json.dumps(diagnostics_all, indent=2))
