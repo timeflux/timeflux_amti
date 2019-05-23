@@ -163,11 +163,6 @@ class ForceDriver(Node):
 
     def update(self):
         """Read samples from the AMTI force platform"""
-        # Send diagnostic dictionary as metadata when it is set
-        if self._diagnostics_dict is not None:
-            self.o.meta = self._diagnostics_dict
-            self._diagnostics_dict = None
-
         # The first time, drop all samples that might have been captured
         # between the initialization and the first time this is called.
         # This step is crucial to get a correct estimation of the drift.
@@ -234,6 +229,12 @@ class ForceDriver(Node):
 
             # Write output to timeflux
             self.o.set(data, timestamps=timestamps[:-1], names=self._channel_names)
+
+            # Send diagnostic dictionary as metadata when it is set, but wait until there is data first
+            # (otherwise hdf5.save will complain)
+            if self._diagnostics_dict is not None:
+                self.o.meta = self._diagnostics_dict
+                self._diagnostics_dict = None
 
     def terminate(self):
         """Release the DLL and internal variables."""
