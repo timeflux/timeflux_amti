@@ -128,7 +128,7 @@ class ForceDriver(Node):
     )
     """Supported sampling rates (in Hz) for the AMTI force platform."""
 
-    def __init__(self, rate=500, dll_dir=None, device_index=0, zero_trigger=None):
+    def __init__(self, rate=500, dll_dir=None, device_index=0, zero_trigger=None, event_label='label'):
         super().__init__()
         if rate not in ForceDriver.SAMPLING_RATES:
             raise ValueError('Invalid sampling rate')
@@ -144,6 +144,7 @@ class ForceDriver(Node):
         self._dev_index = device_index
         self._channel_names = ('counter', 'Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz', 'trigger')
         self._zero_trigger = zero_trigger
+        self._event_label = event_label
         self._dll = None
         self._buffer = None
         self._start_timestamp = None
@@ -172,7 +173,7 @@ class ForceDriver(Node):
 
         # Manage device zeroing
         if self._zero_trigger is not None and self.i.ready():
-            trigger = np.any(self._zero_trigger == self.i.data.label)
+            trigger = np.any(self.i.data[self._event_label] == self._zero_trigger)
             if trigger:
                 self._zero()
 
