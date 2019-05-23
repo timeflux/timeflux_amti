@@ -60,8 +60,13 @@ class ForceDriver(Node):
         device_index (int): Device number to read. AMTI supports several
             chained devices, but this has not been tested in timeflux_amti.
             Use the default, 0.
+        zero_trigger (str): Name of a stimulation event that, when received,
+            will force the device to zero itself, setting the tare value of
+            the force platform.
 
     Attributes:
+        i (Port): Default input, listens for a specific event that triggers the
+            device zeroing procedure.
         o (Port): Default output, provides a pandas.DataFrame with 8 columns.
 
     Examples:
@@ -123,7 +128,7 @@ class ForceDriver(Node):
     )
     """Supported sampling rates (in Hz) for the AMTI force platform."""
 
-    def __init__(self, rate=500, dll_dir=None, device_index=0):
+    def __init__(self, rate=500, dll_dir=None, device_index=0, zero_trigger=None):
         super().__init__()
         if rate not in ForceDriver.SAMPLING_RATES:
             raise ValueError('Invalid sampling rate')
@@ -138,6 +143,7 @@ class ForceDriver(Node):
         self._rate = rate
         self._dev_index = device_index
         self._channel_names = ('counter', 'Fx', 'Fy', 'Fz', 'Mx', 'My', 'Mz', 'trigger')
+        self._zero_trigger = zero_trigger
         self._dll = None
         self._buffer = None
         self._start_timestamp = None
@@ -163,6 +169,13 @@ class ForceDriver(Node):
 
     def update(self):
         """Read samples from the AMTI force platform"""
+
+        # Manage device zeroing
+        if self._zero_trigger is not None and self.i.ready():
+            trigger = np.any(self._zero_trigger == self.i.data.label)
+            if trigger:
+                self._zero()
+
         # The first time, drop all samples that might have been captured
         # between the initialization and the first time this is called.
         # This step is crucial to get a correct estimation of the drift.
@@ -302,8 +315,13 @@ class ForceDriver(Node):
 
         # Start DLL acquisition
         self.driver.fmBroadcastStart()
-        self.driver.fmBroadcastZero()
+        self._zero()
         time.sleep(1)
+
+    def _zero(self):
+        """Zero the device, setting the tare"""
+        self.logger.info('Zeroing the force platform')
+        self.driver.fmBroadcastZero()
 
     def _release_device(self):
         """Perform the device release procedure.
