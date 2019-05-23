@@ -317,6 +317,10 @@ class ForceDriver(Node):
             info = dict(index=dev)
             self.driver.fmDLLSelectDeviceIndex(dev)
 
+            # run mode
+            info['run_mode'] = self.driver.fmGetRunMode()
+            # acquisition rate
+            info['acquisition_rate'] = self.driver.fmGetAcquisitionRate()
             # product type
             info['product_type'] = self.driver.fmGetProductType()
             # amplifier model number
@@ -341,11 +345,16 @@ class ForceDriver(Node):
             self.driver.fmGetDACGainsTable(f6_buffer)
             info['DAC_gains_table'] = list(f6_buffer)
             # DAC offset table
-
+            self.driver.fmGetDACOffsetTable(f6_buffer)
+            info['DAC_offset_table'] = list(f6_buffer)
             # DAC sensitivity table
-
+            self.driver.fmGetDACSensivityTable(f6_buffer)
+            info['DAC_sensitivity_table'] = list(f6_buffer)
             # DAC sensitivities
-
+            self.driver.fmGetDACSensitivities(f6_buffer)
+            info['DAC_senstivities'] = list(f6_buffer)
+            # ADRef
+            info['AD_ref'] = self.driver.fmGetADRef()
             # gains
             self.driver.fmGetCurrentGains(l6_buffer)
             info['gains'] = list(l6_buffer)
@@ -369,13 +378,6 @@ class ForceDriver(Node):
             self._retry(lambda: self.driver.fmGetAnalogMaxAndMin(f12_buffer) != 1,
                         num_retries=3, wait=1, description='Obtaining analog max and min')
             info['analog_max_and_min'] = list(f12_buffer)
-            # sensitivity table
-
-            # run mode
-
-            # acquisition rate
-
-            # product type
 
             diagnostics_all.append(info)
 
