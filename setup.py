@@ -15,8 +15,8 @@ setup_requirements = ['pytest-runner', ]
 test_requirements = ['pytest', ]
 
 setup(
-    author='',
-    author_email='',
+    author='David Ojeda',
+    author_email='david.ojeda@gmail.com',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',
@@ -35,6 +35,6 @@ setup(
     test_suite='test',
     tests_require=test_requirements,
     url='https://github.com/timeflux/timeflux_amti',
-    version='0.1.0',
+    version='0.2.0',
     zip_safe=False,
 )
