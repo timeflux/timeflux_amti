@@ -321,16 +321,16 @@ class ForceDriver(Node):
             info['product_type'] = self.driver.fmGetProductType()
             # amplifier model number
             self.driver.fmGetAmplifierModelNumber(c32_buffer)
-            info['amplifier_model_number'] = str(c32_buffer)
+            info['amplifier_model_number'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
             # amplifier serial number
             self.driver.fmGetAmplifierSerialNumber(c32_buffer)
-            info['amplifier_serial_number'] = str(c32_buffer)
+            info['amplifier_serial_number'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
             # amplifier firmware version
             self.driver.fmGetAmplifierFirmwareVersion(c32_buffer)
-            info['amplifier_firmware_version'] = str(c32_buffer)
+            info['amplifier_firmware_version'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
             # amplifier last calibration date
             self.driver.fmGetAmplifierDate(c32_buffer)
-            info['amplifier_last_calibration_date'] = str(c32_buffer)
+            info['amplifier_last_calibration_date'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
             # gain table
             self.driver.fmGetGainTable(f24_buffer)
             info['gain_table'] = list(f24_buffer)
@@ -365,11 +365,10 @@ class ForceDriver(Node):
             self._retry(lambda: self.driver.fmGetMechanicalMaxAndMin(f12_buffer) != 1,
                         num_retries=3, wait=1, description='Obtaining mechanical max and min')
             info['mechanical_max_and_min'] = list(f12_buffer)
-            # # analog max and min
-            # if self.driver.fmGetAnalogMaxAndMin(f12_buffer) != 1:
-            #     raise RuntimeError('Unexpected return value to fmGetAnalogMaxAndMin')
-            # info['analog_max_and_min'] = list(f12_buffer)
-
+            # analog max and min
+            self._retry(lambda: self.driver.fmGetAnalogMaxAndMin(f12_buffer) != 1,
+                        num_retries=3, wait=1, description='Obtaining analog max and min')
+            info['analog_max_and_min'] = list(f12_buffer)
             # sensitivity table
 
             # run mode
@@ -380,7 +379,7 @@ class ForceDriver(Node):
 
             diagnostics_all.append(info)
 
-        self.logger.info('AMTI diagnostics results:\n %s',
+        self.logger.info('AMTI diagnostics results:\n%s',
                          json.dumps(diagnostics_all, indent=2))
 
     def _retry(self, predicate, num_retries=3, wait=1, description=None, exception=None):
