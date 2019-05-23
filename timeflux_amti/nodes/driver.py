@@ -6,6 +6,7 @@ Use this node to acquire data from a AMTI force device.
 """
 
 import ctypes
+import json
 import pathlib
 import sys
 import time
@@ -142,6 +143,7 @@ class ForceDriver(Node):
         self._start_timestamp = None
         self._reference_ts = None
         self._sample_count = None
+        self._diagnostics_dict = None
         self._init_device()
 
     @property
@@ -228,6 +230,12 @@ class ForceDriver(Node):
             # Write output to timeflux
             self.o.set(data, timestamps=timestamps[:-1], names=self._channel_names)
 
+            # Send diagnostic dictionary as metadata when it is set, but wait until there is data first
+            # (otherwise hdf5.save will complain)
+            if self._diagnostics_dict is not None:
+                self.o.meta = self._diagnostics_dict
+                self._diagnostics_dict = None
+
     def terminate(self):
         """Release the DLL and internal variables."""
         self._release_device()
@@ -242,11 +250,16 @@ class ForceDriver(Node):
         if sys.platform != 'win32':
             raise TimefluxAmtiException('This node is supported on Windows only')
 
+        # Setup some DLL functions that do not return int but something else
+        self.driver.fmGetCableLength.restype = ctypes.c_float
+        self.driver.fmGetPlatformRotation.restype = ctypes.c_float
+        self.driver.fmGetADRef.restype = ctypes.c_float
+
         # DLL initialization as specified in SDK section 7.0
         self.logger.info('Initializing driver...')
         self.driver.fmDLLInit()
         retries = 3
-        while True:
+        while True:  # TODO: change to self._retry
             time.sleep(0.250)  # Sleep 250ms as specified in SDK section 20.0
             res = self.driver.fmDLLIsDeviceInitComplete()
             if res in (1, 2):
@@ -260,14 +273,6 @@ class ForceDriver(Node):
                                     'of C:/AMTI/AMTIUsbSetup.cfg')
                 raise TimefluxAmtiException('Could not initialize DLL')
 
-        self.logger.info('Setup check')
-        res = self.driver.fmDLLSetupCheck()
-        if res not in (0, 1, 214):
-            # 0: no signal conditioners found (ok)
-            # 1: current setup is the same as the last saved configuration (ok)
-            # 214: configuration has changed (ok)
-            raise TimefluxAmtiException(f'Setup check failed with code {res}')
-
         self.logger.info('Selecting device %d', self._dev_index)
         n_devices = self.driver.fmDLLGetDeviceCount()
         if n_devices <= 0:
@@ -279,6 +284,21 @@ class ForceDriver(Node):
         self.driver.fmBroadcastRunMode(1)  # metric, fully conditioned
         self.driver.fmDLLSetDataFormat(1)  # 8 values: counter, 3 force, 3 momentum, trigger
         self._buffer = (ctypes.c_float * (8 * 16))()  # 8 values per sample, and AMTI gives 16 samples every time
+
+        # Log some diagnostics before starting
+        self._diagnostics_dict = self._diagnostics()
+        # Select back the device
+        self.driver.fmDLLSelectDeviceIndex(self._dev_index)
+
+        # When the setup check failed, save the configuration, and abort so that
+        # next time the node works.
+        self.logger.info('Setup check')
+        setup_check_code = self.driver.fmDLLSetupCheck()
+        if setup_check_code not in (0, 1):
+            # 0: no signal conditioners found (ok)
+            # 1: current setup is the same as the last saved configuration (ok)
+            self._save_config()
+            raise TimefluxAmtiException(f'Setup check failed with code {setup_check_code}')
 
         # Start DLL acquisition
         self.driver.fmBroadcastStart()
@@ -294,6 +314,173 @@ class ForceDriver(Node):
         """
         self.logger.info('Releasing AMTIUSBDevice')
         self.driver.fmBroadcastStop()
+        self._save_config()
         self.driver.fmDLLShutDown()
         time.sleep(0.500)  # Sleep 500ms as specified in SDK section 7.0
         self.logger.info('Device released')
+
+    def _save_config(self):
+        retcode = self.driver.fmDLLSaveConfiguration()
+        if retcode != 1:
+            self.logger.warning('Could not save DLL configuration')
+
+    def _diagnostics(self):
+
+        self.logger.info('Performing AMTI diagnostics')
+        long_buffer = (ctypes.c_long * 64)()
+        float_buffer = (ctypes.c_float * 64)()
+        char_buffer = (ctypes.c_char * 64)()
+        char_buffer2 = (ctypes.c_char * 64)()
+
+        # DLL-level (general) diagnostics
+        general = dict()
+
+        general['init_complete'] = self.driver.fmDLLIsDeviceInitComplete()
+        general['setup_check'] = self.driver.fmDLLSetupCheck()
+        n_devices = self.driver.fmDLLGetDeviceCount()
+        general['device_count'] = n_devices
+        general['run_mode'] = self.driver.fmDLLGetRunMode()  # Note: exists also for device
+        general['genlock'] = self.driver.fmDLLGetGenlock()
+        general['acquisition_rate'] = self.driver.fmDLLGetAcquisitionRate()  # Note: exists also for device
+
+        # Device-specific diagnostics
+        devices = []
+        for dev in range(n_devices):
+            info = dict(index=dev)
+            self.driver.fmDLLSelectDeviceIndex(dev)
+
+            # general
+            info['index'] = self.driver.fmDLLGetDeviceIndex()
+            # run mode
+            info['run_mode'] = self.driver.fmGetRunMode()
+            # acquisition rate
+            info['acquisition_rate'] = self.driver.fmGetAcquisitionRate()
+
+            # signal conditioner configuration
+            sc_config = dict()
+            info['config'] = sc_config
+            # gains
+            self.driver.fmGetCurrentGains(long_buffer)
+            sc_config['gains'] = long_buffer[:6]
+            # excitations
+            self.driver.fmGetCurrentExcitations(long_buffer)
+            sc_config['excitations'] = long_buffer[:6]
+            # channel offsets
+            self.driver.fmGetChannelOffsetsTable(float_buffer)
+            sc_config['channel_offsets'] = float_buffer[:6]
+            # cable length
+            sc_config['cable_length'] = self.driver.fmGetCableLength()
+            # matrix mode
+            sc_config['matrix_mode'] = self.driver.fmGetMatrixMode()
+            # platform rotation
+            sc_config['platform_rotation'] = self.driver.fmGetPlatformRotation()
+
+            # signal conditioner mechanical limits
+            sc_limits = dict()
+            info['limits'] = sc_limits
+            # mechanical max and min
+            self._retry(lambda: self.driver.fmGetMechanicalMaxAndMin(float_buffer) != 1,
+                        num_retries=3, wait=1, description='Obtaining mechanical max and min')
+            sc_limits['mechanical_max_and_min'] = list(zip(float_buffer[0:6], float_buffer[6:12]))
+            # analog max and min
+            self._retry(lambda: self.driver.fmGetAnalogMaxAndMin(float_buffer) != 1,
+                        num_retries=3, wait=1, description='Obtaining analog max and min')
+            sc_limits['analog_max_and_min'] = list(zip(float_buffer[0:6], float_buffer[6:12]))
+
+            # signal conditioner calibrations
+            sc_calib = dict()
+            sc_calib['amplifier'] = dict()
+            info['signal_conditioner_calibration'] = sc_calib
+            # product type
+            sc_calib['product_type'] = self.driver.fmGetProductType()
+            # amplifier model number
+            self.driver.fmGetAmplifierModelNumber(char_buffer)
+            sc_calib['amplifier']['model_number'] = ctypes.cast(char_buffer, ctypes.c_char_p).value.decode('ascii')
+            # amplifier serial number
+            self.driver.fmGetAmplifierSerialNumber(char_buffer)
+            sc_calib['amplifier']['serial_number'] = ctypes.cast(char_buffer, ctypes.c_char_p).value.decode('ascii')
+            # amplifier firmware version
+            self.driver.fmGetAmplifierFirmwareVersion(char_buffer)
+            sc_calib['amplifier']['firmware_version'] = ctypes.cast(char_buffer, ctypes.c_char_p).value.decode('ascii')
+            # amplifier last calibration date
+            self.driver.fmGetAmplifierDate(char_buffer)
+            sc_calib['amplifier']['calibration_date'] = ctypes.cast(char_buffer, ctypes.c_char_p).value.decode('ascii')
+            # gain table
+            self.driver.fmGetGainTable(float_buffer)
+            sc_calib['gain_table'] = float_buffer[:24]
+            # excitation table
+            self.driver.fmGetExcitationTable(float_buffer)
+            sc_calib['excitation_table'] = float_buffer[:18]
+            # DAC gains table
+            self.driver.fmGetDACGainsTable(float_buffer)
+            sc_calib['DAC_gains_table'] = float_buffer[:6]
+            # DAC offset table
+            self.driver.fmGetDACOffsetTable(float_buffer)
+            sc_calib['DAC_offset_table'] = float_buffer[:6]
+            # DAC sensitivities
+            self.driver.fmGetDACSensitivities(float_buffer)
+            sc_calib['DAC_sensitivities'] = float_buffer[:6]
+            # ADRef
+            sc_calib['AD_ref'] = self.driver.fmGetADRef()
+
+            # Platform calibrations
+            pc_calib = dict()
+            info['platform_calibration'] = pc_calib
+
+            # platform last calibration date
+            self.driver.fmGetPlatformDate(char_buffer)
+            pc_calib['calibration_date'] = ctypes.cast(char_buffer, ctypes.c_char_p).value.decode('ascii')
+            # platform model number
+            self.driver.fmGetPlatformModelNumber(char_buffer)
+            pc_calib['model_number'] = ctypes.cast(char_buffer, ctypes.c_char_p).value.decode('ascii')
+            # platform serial number
+            self.driver.fmGetPlatformSerialNumber(char_buffer)
+            pc_calib['serial_number'] = ctypes.cast(char_buffer, ctypes.c_char_p).value.decode('ascii')
+            # platform length and width
+            self.driver.fmGetPlatformLengthAndWidth(char_buffer, char_buffer2)
+            pc_calib['length'] = ctypes.cast(char_buffer, ctypes.c_char_p).value.decode('ascii')
+            pc_calib['width'] = ctypes.cast(char_buffer2, ctypes.c_char_p).value.decode('ascii')
+            # platform xyz offsets
+            self.driver.fmGetPlatformXYZOffsets(float_buffer)
+            pc_calib['xyz_offset'] = float_buffer[:3]
+            # platform xyz extensions
+            self.driver.fmGetPlatformXYZExtensions(float_buffer)
+            pc_calib['xyz_extensions'] = float_buffer[:3]
+            # platform capacity
+            self.driver.fmGetPlatformCapacity(float_buffer)
+            pc_calib['capacity'] = float_buffer[:6]
+            # platform bridge resistance
+            self.driver.fmGetPlatformBridgeResistance(float_buffer)
+            pc_calib['bridge_resistance'] = float_buffer[:6]
+            # platform sensitivity matrix
+            self.driver.fmGetInvertedSensitivityMatrix(float_buffer)
+            pc_calib['inverted_sensitivity_matrix'] = float_buffer[:36]
+
+            # That is all we can get from the platform!
+            devices.append(info)
+
+        diagnostics = dict(
+            general=general,
+            devices=devices,
+        )
+        self.logger.info('AMTI diagnostics results:\n%s',
+                         json.dumps(diagnostics, indent=2))
+        return diagnostics
+
+    def _retry(self, predicate, num_retries=3, wait=1, description=None, exception=None):
+        result = predicate()
+        if wait < 0:
+            wait = 1
+        while not result and num_retries > 0:
+            if description:
+                self.logger.debug('%s failed, retyring in %f seconds...', description, wait)
+            time.sleep(wait)
+            result = predicate()
+            num_retries -= 1
+        exception = exception or TimefluxAmtiException
+        if not result:
+            desc = 'Failed to perform retryable operation'
+            if description:
+                desc += str(description)
+            raise exception(description)
+
