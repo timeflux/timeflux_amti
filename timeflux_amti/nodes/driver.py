@@ -362,13 +362,13 @@ class ForceDriver(Node):
             # cable length
             info['cable_length'] = self.driver.fmGetCableLength()
             # mechanical max and min
-            if self.driver.fmGetMechanicalMaxAndMin(f12_buffer) != 1:
-                raise RuntimeError('Unexpected return value to fmGetMechanicalMaxAndMin')
+            self._retry(lambda: self.driver.fmGetMechanicalMaxAndMin(f12_buffer) != 1,
+                        num_retries=3, wait=1, description='Obtaining mechanical max and min')
             info['mechanical_max_and_min'] = list(f12_buffer)
-            # analog max and min
-            if self.driver.fmGetAnalogMaxAndMin(f12_buffer) != 1:
-                raise RuntimeError('Unexpected return value to fmGetAnalogMaxAndMin')
-            info['analog_max_and_min'] = list(f12_buffer)
+            # # analog max and min
+            # if self.driver.fmGetAnalogMaxAndMin(f12_buffer) != 1:
+            #     raise RuntimeError('Unexpected return value to fmGetAnalogMaxAndMin')
+            # info['analog_max_and_min'] = list(f12_buffer)
 
             # sensitivity table
 
@@ -382,3 +382,19 @@ class ForceDriver(Node):
 
         self.logger.info('AMTI diagnostics results:\n %s',
                          json.dumps(diagnostics_all, indent=2))
+
+    def _retry(self, predicate, num_retries=3, wait=1, description=None, exception=None):
+        result = predicate()
+        while not result and num_retries > 0:
+            if description:
+                self.logger.debug('%s failed, retyring in %f seconds...', description, wait)
+            time.sleep(1)
+            result = predicate()
+            num_retries -= 1
+        exception = exception or RuntimeError
+        if not result:
+            desc = 'Failed to perform retryable operation'
+            if description:
+                desc += str(description)
+            raise exception(description)
+
