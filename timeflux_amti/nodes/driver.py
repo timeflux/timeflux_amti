@@ -243,6 +243,11 @@ class ForceDriver(Node):
         if sys.platform != 'win32':
             raise TimefluxAmtiException('This node is supported on Windows only')
 
+        # Setup some DLL functions that do not return int but something else
+        self.driver.fmGetCableLength.restype = ctypes.c_float
+        self.driver.fmGetPlatformRotation.restype = ctypes.c_float
+        self.driver.fmGetADRef.restype = ctypes.c_float
+
         # DLL initialization as specified in SDK section 7.0
         self.logger.info('Initializing driver...')
         self.driver.fmDLLInit()
