@@ -6,6 +6,7 @@ Use this node to acquire data from a AMTI force device.
 """
 
 import ctypes
+import json
 import pathlib
 import sys
 import time
@@ -268,6 +269,8 @@ class ForceDriver(Node):
             # 214: configuration has changed (ok)
             raise TimefluxAmtiException(f'Setup check failed with code {res}')
 
+        self._diagnostics()
+
         self.logger.info('Selecting device %d', self._dev_index)
         n_devices = self.driver.fmDLLGetDeviceCount()
         if n_devices <= 0:
@@ -297,3 +300,21 @@ class ForceDriver(Node):
         self.driver.fmDLLShutDown()
         time.sleep(0.500)  # Sleep 500ms as specified in SDK section 7.0
         self.logger.info('Device released')
+
+    def _diagnostics(self):
+
+        self.logger.info('Performing AMTI diagnostics')
+        n_devices = self.driver.fmDLLGetDeviceCount()
+        diagnostics_all = []
+        for dev in range(n_devices):
+            device_diagnostic = dict(index=dev)
+            self.driver.fmDLLSelectDeviceIndex(dev)
+            # gains
+            l_buffer = (ctypes.c_long * 6)()
+            self.driver.fmDLLGetCurrentGains(l_buffer)
+            device_diagnostic['gains'] = l_buffer
+
+            diagnostics_all.append(device_diagnostic)
+
+        self.logger.info('AMTI diagnostics results:\n %s',
+                         json.dumps(diagnostics_all, indent=2))
