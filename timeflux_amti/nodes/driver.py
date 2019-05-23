@@ -312,6 +312,9 @@ class ForceDriver(Node):
         """
         self.logger.info('Releasing AMTIUSBDevice')
         self.driver.fmBroadcastStop()
+        retcode = self.driver.fmDLLSaveConfiguration()
+        if retcode != 1:
+            self.logger.warning('Could not save DLL configuration')
         self.driver.fmDLLShutDown()
         time.sleep(0.500)  # Sleep 500ms as specified in SDK section 7.0
         self.logger.info('Device released')
