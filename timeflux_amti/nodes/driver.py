@@ -247,7 +247,7 @@ class ForceDriver(Node):
         self.logger.info('Initializing driver...')
         self.driver.fmDLLInit()
         retries = 3
-        while True:
+        while True:  # TODO: change to self._retry
             time.sleep(0.250)  # Sleep 250ms as specified in SDK section 20.0
             res = self.driver.fmDLLIsDeviceInitComplete()
             if res in (1, 2):
@@ -266,10 +266,8 @@ class ForceDriver(Node):
         if res not in (0, 1, 214):
             # 0: no signal conditioners found (ok)
             # 1: current setup is the same as the last saved configuration (ok)
-            # 214: configuration has changed (ok)
+            # 214: configuration has changed (ok?)
             raise TimefluxAmtiException(f'Setup check failed with code {res}')
-
-        self._diagnostics()
 
         self.logger.info('Selecting device %d', self._dev_index)
         n_devices = self.driver.fmDLLGetDeviceCount()
@@ -282,6 +280,11 @@ class ForceDriver(Node):
         self.driver.fmBroadcastRunMode(1)  # metric, fully conditioned
         self.driver.fmDLLSetDataFormat(1)  # 8 values: counter, 3 force, 3 momentum, trigger
         self._buffer = (ctypes.c_float * (8 * 16))()  # 8 values per sample, and AMTI gives 16 samples every time
+
+        # Log some diagnostics before starting
+        self._diagnostics()
+        # Select back the device
+        self.driver.fmDLLSelectDeviceIndex(self._dev_index)
 
         # Start DLL acquisition
         self.driver.fmBroadcastStart()
@@ -304,81 +307,141 @@ class ForceDriver(Node):
     def _diagnostics(self):
 
         self.logger.info('Performing AMTI diagnostics')
+
+        # DLL-level (general) diagnostics
+        general = dict()
+
+        general['init_complete'] = self.driver.fmDLLIsDeviceInitComplete()
+        general['setup_check'] = self.driver.fmDLLSetupCheck()
+        n_devices = self.driver.fmDLLGetDeviceCount()
+        general['device_count'] = n_devices
+        general['run_mode'] = self.driver.fmDLLGetRunMode()  # Note: exists also for device
+        general['genlock'] = self.driver.fmDLLGetGenlock()
+        general['acquisition_rate'] = self.driver.fmDLLGetAcquisitionRate()  # Note: exists also for device
+
+        # Device-specific diagnostics
         l6_buffer = (ctypes.c_long * 6)()
         f6_buffer = (ctypes.c_float * 6)()
         f12_buffer = (ctypes.c_float * 12)()
         f18_buffer = (ctypes.c_float * 18)()
         f24_buffer = (ctypes.c_float * 24)()
-        c32_buffer = (ctypes.c_char * 32)()  # Use 32 instead of 16 or 12 chars in case \0 is not set
+        f36_buffer = (ctypes.c_float * 36)()
+        c32_buffer = (ctypes.c_char * 32)()   # Use 32 instead of 16 or 12 chars in case \0 is not set
+        c32_buffer2 = (ctypes.c_char * 32)()  # Use 32 instead of 16 or 12 chars in case \0 is not set
 
-        n_devices = self.driver.fmDLLGetDeviceCount()
         diagnostics_all = []
         for dev in range(n_devices):
             info = dict(index=dev)
             self.driver.fmDLLSelectDeviceIndex(dev)
 
+            # general
+            info['index'] = self.driver.fmDLLGetDeviceIndex()
             # run mode
             info['run_mode'] = self.driver.fmGetRunMode()
             # acquisition rate
             info['acquisition_rate'] = self.driver.fmGetAcquisitionRate()
-            # product type
-            info['product_type'] = self.driver.fmGetProductType()
-            # amplifier model number
-            self.driver.fmGetAmplifierModelNumber(c32_buffer)
-            info['amplifier_model_number'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
-            # amplifier serial number
-            self.driver.fmGetAmplifierSerialNumber(c32_buffer)
-            info['amplifier_serial_number'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
-            # amplifier firmware version
-            self.driver.fmGetAmplifierFirmwareVersion(c32_buffer)
-            info['amplifier_firmware_version'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
-            # amplifier last calibration date
-            self.driver.fmGetAmplifierDate(c32_buffer)
-            info['amplifier_last_calibration_date'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
-            # gain table
-            self.driver.fmGetGainTable(f24_buffer)
-            info['gain_table'] = list(f24_buffer)
-            # excitation table
-            self.driver.fmGetExcitationTable(f18_buffer)
-            info['excitation_table'] = list(f18_buffer)
-            # DAC gains table
-            self.driver.fmGetDACGainsTable(f6_buffer)
-            info['DAC_gains_table'] = list(f6_buffer)
-            # DAC offset table
-            self.driver.fmGetDACOffsetTable(f6_buffer)
-            info['DAC_offset_table'] = list(f6_buffer)
-            # DAC sensitivity table
-            self.driver.fmGetDACSensivityTable(f6_buffer)
-            info['DAC_sensitivity_table'] = list(f6_buffer)
-            # DAC sensitivities
-            self.driver.fmGetDACSensitivities(f6_buffer)
-            info['DAC_senstivities'] = list(f6_buffer)
-            # ADRef
-            info['AD_ref'] = self.driver.fmGetADRef()
+
+            # signal conditioner configuration
+            sc_config = dict()
+            info['config'] = sc_config
             # gains
             self.driver.fmGetCurrentGains(l6_buffer)
-            info['gains'] = list(l6_buffer)
+            sc_config['gains'] = list(l6_buffer)
             # excitations
             self.driver.fmGetCurrentExcitations(l6_buffer)
-            info['excitations'] = list(l6_buffer)
-            # matrix mode
-            info['matrix_mode'] = self.driver.fmGetMatrixMode()
+            sc_config['excitations'] = list(l6_buffer)
             # channel offsets
             self.driver.fmGetChannelOffsetsTable(f6_buffer)
-            info['channel_offsets'] = list(f6_buffer)
-            # platform rotation
-            info['platform_rotation'] = self.driver.fmGetPlatformRotation()
+            sc_config['channel_offsets'] = list(f6_buffer)
             # cable length
-            info['cable_length'] = self.driver.fmGetCableLength()
+            sc_config['cable_length'] = self.driver.fmGetCableLength()
+            # matrix mode
+            sc_config['matrix_mode'] = self.driver.fmGetMatrixMode()
+            # platform rotation
+            sc_config['platform_rotation'] = self.driver.fmGetPlatformRotation()
+
+            # signal conditioner mechanical limits
+            sc_limits = dict()
+            info['limits'] = sc_limits
             # mechanical max and min
             self._retry(lambda: self.driver.fmGetMechanicalMaxAndMin(f12_buffer) != 1,
                         num_retries=3, wait=1, description='Obtaining mechanical max and min')
-            info['mechanical_max_and_min'] = list(f12_buffer)
+            sc_limits['mechanical_max_and_min'] = list(f12_buffer)
             # analog max and min
             self._retry(lambda: self.driver.fmGetAnalogMaxAndMin(f12_buffer) != 1,
                         num_retries=3, wait=1, description='Obtaining analog max and min')
-            info['analog_max_and_min'] = list(f12_buffer)
+            sc_limits['analog_max_and_min'] = list(f12_buffer)
 
+            # signal conditioner calibrations
+            sc_calib = dict()
+            sc_calib['amplifier'] = dict()
+            info['signal_conditioner_calibration'] = sc_calib
+            # product type
+            sc_calib['product_type'] = self.driver.fmGetProductType()
+            # amplifier model number
+            self.driver.fmGetAmplifierModelNumber(c32_buffer)
+            sc_calib['amplifier']['model_number'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
+            # amplifier serial number
+            self.driver.fmGetAmplifierSerialNumber(c32_buffer)
+            sc_calib['amplifier']['serial_number'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
+            # amplifier firmware version
+            self.driver.fmGetAmplifierFirmwareVersion(c32_buffer)
+            sc_calib['amplifier']['firmware_version'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
+            # amplifier last calibration date
+            self.driver.fmGetAmplifierDate(c32_buffer)
+            sc_calib['amplifier']['calibration_date'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
+            # gain table
+            self.driver.fmGetGainTable(f24_buffer)
+            sc_calib['gain_table'] = list(f24_buffer)
+            # excitation table
+            self.driver.fmGetExcitationTable(f18_buffer)
+            sc_calib['excitation_table'] = list(f18_buffer)
+            # DAC gains table
+            self.driver.fmGetDACGainsTable(f6_buffer)
+            sc_calib['DAC_gains_table'] = list(f6_buffer)
+            # DAC offset table
+            self.driver.fmGetDACOffsetTable(f6_buffer)
+            sc_calib['DAC_offset_table'] = list(f6_buffer)
+            # DAC sensitivities
+            self.driver.fmGetDACSensitivities(f6_buffer)
+            sc_calib['DAC_sensitivities'] = list(f6_buffer)
+            # ADRef
+            sc_calib['AD_ref'] = self.driver.fmGetADRef()
+
+            # Platform calibrations
+            pc_calib = dict()
+            info['platform_calibration'] = pc_calib
+
+            # platform last calibration date
+            self.driver.fmGetPlatformDate(c32_buffer)
+            pc_calib['calibration_date'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
+            # platform model number
+            self.driver.fmGetPlatformModelNumber(c32_buffer)
+            pc_calib['model_number'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
+            # platform serial number
+            self.driver.fmGetPlatformSerialNumber(c32_buffer)
+            pc_calib['serial_number'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
+            # platform length and width
+            self.driver.fmGetPlatformLengthAndWidth(c32_buffer, c32_buffer2)
+            pc_calib['length'] = ctypes.cast(c32_buffer, ctypes.c_char_p).value.decode('ascii')
+            pc_calib['width'] = ctypes.cast(c32_buffer2, ctypes.c_char_p).value.decode('ascii')
+            # platform xyz offsets
+            self.driver.fmGetPlatformXYZOffsets(f6_buffer)
+            pc_calib['xyz_offset'] = f6_buffer[:3]
+            # platform xyz extensions
+            self.driver.fmGetPlatformXYZExtensions(f6_buffer)
+            pc_calib['xyz_extensions'] = f6_buffer[:3]
+            # platform capacity
+            self.driver.fmGetPlatformCapacity(f6_buffer)
+            pc_calib['capacity'] = list(f6_buffer)
+            # platform bridge resistance
+            self.driver.fmGetPlatformBridgeResistance(f6_buffer)
+            pc_calib['bridge_resistance'] = list(f6_buffer)
+            # platform sensitivity matrix
+            self.driver.fmGetInvertedSensitivityMatrix(f36_buffer)
+            pc_calib['inverted_sensitivity_matrix'] = list(f36_buffer)
+
+            # That is all we can get from the platform!
             diagnostics_all.append(info)
 
         self.logger.info('AMTI diagnostics results:\n%s',
@@ -386,13 +449,15 @@ class ForceDriver(Node):
 
     def _retry(self, predicate, num_retries=3, wait=1, description=None, exception=None):
         result = predicate()
+        if wait < 0:
+            wait = 1
         while not result and num_retries > 0:
             if description:
                 self.logger.debug('%s failed, retyring in %f seconds...', description, wait)
-            time.sleep(1)
+            time.sleep(wait)
             result = predicate()
             num_retries -= 1
-        exception = exception or RuntimeError
+        exception = exception or TimefluxAmtiException
         if not result:
             desc = 'Failed to perform retryable operation'
             if description:
