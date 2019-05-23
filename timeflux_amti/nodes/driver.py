@@ -273,14 +273,6 @@ class ForceDriver(Node):
                                     'of C:/AMTI/AMTIUsbSetup.cfg')
                 raise TimefluxAmtiException('Could not initialize DLL')
 
-        self.logger.info('Setup check')
-        res = self.driver.fmDLLSetupCheck()
-        if res not in (0, 1, 214):
-            # 0: no signal conditioners found (ok)
-            # 1: current setup is the same as the last saved configuration (ok)
-            # 214: configuration has changed (ok?)
-            raise TimefluxAmtiException(f'Setup check failed with code {res}')
-
         self.logger.info('Selecting device %d', self._dev_index)
         n_devices = self.driver.fmDLLGetDeviceCount()
         if n_devices <= 0:
@@ -298,6 +290,16 @@ class ForceDriver(Node):
         # Select back the device
         self.driver.fmDLLSelectDeviceIndex(self._dev_index)
 
+        # When the setup check failed, save the configuration, and abort so that
+        # next time the node works.
+        self.logger.info('Setup check')
+        setup_check_code = self.driver.fmDLLSetupCheck()
+        if setup_check_code not in (0, 1):
+            # 0: no signal conditioners found (ok)
+            # 1: current setup is the same as the last saved configuration (ok)
+            self._save_config()
+            raise TimefluxAmtiException(f'Setup check failed with code {setup_check_code}')
+
         # Start DLL acquisition
         self.driver.fmBroadcastStart()
         self.driver.fmBroadcastZero()
@@ -312,12 +314,15 @@ class ForceDriver(Node):
         """
         self.logger.info('Releasing AMTIUSBDevice')
         self.driver.fmBroadcastStop()
-        retcode = self.driver.fmDLLSaveConfiguration()
-        if retcode != 1:
-            self.logger.warning('Could not save DLL configuration')
+        self._save_config()
         self.driver.fmDLLShutDown()
         time.sleep(0.500)  # Sleep 500ms as specified in SDK section 7.0
         self.logger.info('Device released')
+
+    def _save_config(self):
+        retcode = self.driver.fmDLLSaveConfiguration()
+        if retcode != 1:
+            self.logger.warning('Could not save DLL configuration')
 
     def _diagnostics(self):
 
