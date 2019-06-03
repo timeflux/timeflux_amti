@@ -190,8 +190,6 @@ class ForceDriver(Node):
 
             self.logger.info('Dropped a total of %d samples of data between '
                              'driver initialization and first node update', n_drop)
-            self._start_timestamp = np.datetime64(int(time.time() * 1e6), 'us')
-            self._reference_ts = self._start_timestamp
             self._sample_count = 0
 
         data = []
@@ -210,6 +208,15 @@ class ForceDriver(Node):
         if data:
             data = np.vstack(data)
             n_samples = data.shape[0]
+
+            # account for read data for starting timestamp
+            if self._sample_count == 0 and n_samples > 0:
+                self._start_timestamp = (
+                    np.datetime64(int(time.time() * 1e6), 'us') -
+                    # Adjust for the read samples
+                    int(1e6 * n_samples / self._rate)
+                )
+                self._reference_ts = self._start_timestamp
 
             # verify that there is no buffer overflow, but ignore the case when
             # the counter rolls over (which is at 2^24 - 1, according to SDK on
