@@ -345,7 +345,7 @@ class ForceDriver(Node):
 
     def _diagnostics(self):
 
-        self.logger.info('Performing AMTI diagnostics')
+        self.logger.debug('Performing AMTI diagnostics')
         long_buffer = (ctypes.c_long * 64)()
         float_buffer = (ctypes.c_float * 64)()
         char_buffer = (ctypes.c_char * 64)()
@@ -482,8 +482,8 @@ class ForceDriver(Node):
             general=general,
             devices=devices,
         )
-        self.logger.info('AMTI diagnostics results:\n%s',
-                         json.dumps(diagnostics, indent=2))
+        self.logger.debug('AMTI diagnostics results:\n%s',
+                          json.dumps(diagnostics, indent=2))
         return diagnostics
 
     def _retry(self, predicate, num_retries=3, wait=1, description=None, exception=None):
@@ -502,4 +502,3 @@ class ForceDriver(Node):
             if description:
                 desc += str(description)
             raise exception(description)
-
